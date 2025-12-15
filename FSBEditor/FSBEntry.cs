@@ -9,7 +9,7 @@ namespace FSBEditor
     public enum FSBCodec : byte
     {
         XMA = 1,
-        ADPCM = 4
+        ADPCM = 7
     }
 
     class FSBEntry

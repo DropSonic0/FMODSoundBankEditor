@@ -163,21 +163,36 @@ namespace FSBEditor
             {
                 try
                 {
+                    FSBEntry tempEntry = null;
                     string extension = Path.GetExtension(openFile.FileName).ToLower();
                     if (extension == ".xma")
                     {
-                        currentFsbEntry = fsb.ReadXMA(openFile.FileName);
+                        tempEntry = fsb.ReadXMA(openFile.FileName);
                     }
                     else if (extension == ".wav")
                     {
-                        currentFsbEntry = fsb.ReadWAV(openFile.FileName);
+                        tempEntry = fsb.ReadWAV(openFile.FileName);
                     }
                     else
                     {
                         throw new InvalidDataException("Unsupported file type.");
                     }
 
-                    fsb.fsbEntries[lstFsb.SelectedIndex] = currentFsbEntry;
+                    // Get the existing entry to preserve its metadata
+                    FSBEntry existingEntry = fsb.fsbEntries[lstFsb.SelectedIndex];
+
+                    // Copy only the audio-related data from the new file
+                    existingEntry.name = tempEntry.name;
+                    existingEntry.sourceFileName = tempEntry.sourceFileName;
+                    existingEntry.numSamples = tempEntry.numSamples;
+                    existingEntry.streamSize = tempEntry.streamSize;
+                    existingEntry.loopEndSample = tempEntry.loopEndSample;
+                    existingEntry.sampleRate = tempEntry.sampleRate;
+                    existingEntry.numChannels = tempEntry.numChannels;
+                    existingEntry.audioData = tempEntry.audioData;
+                    existingEntry.codec = tempEntry.codec;
+
+                    currentFsbEntry = existingEntry;
 
                     RefreshFields(lstFsb.SelectedIndex, currentFsbEntry);
                 }
