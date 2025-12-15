@@ -59,7 +59,7 @@ namespace FSBEditor
 
                     stream.Position += 0x03;
 
-                    entry.codec = (byte)stream.ReadByte();
+                    entry.codec = (FSBCodec)stream.ReadByte();
                     entry.sampleRate = stream.ReadInt32();
                     entry.pan = stream.ReadInt16();
                     entry.defPri = stream.ReadInt16();
@@ -101,7 +101,7 @@ namespace FSBEditor
                 string fileName = Path.GetFileNameWithoutExtension(path);
 
                 entry.name = fileName.Substring(0, fileName.Length > 32 ? 31 : fileName.Length);
-                entry.xmaName = fileName;
+                entry.sourceFileName = Path.GetFileName(path);
 
                 stream.Position = 0x16;
 
@@ -117,6 +117,86 @@ namespace FSBEditor
 
                 entry.streamSize = stream.ReadInt32();
                 entry.audioData = stream.ReadBytes(entry.streamSize);
+            }
+
+            return entry;
+        }
+
+        public FSBEntry ReadWAV(string path)
+        {
+            FSBEntry entry = new FSBEntry();
+            using (var stream = new BinaryStream(File.OpenRead(path)))
+            {
+                // Read RIFF header
+                if (stream.ReadString(4) != "RIFF")
+                    throw new InvalidDataException("Not a WAV file. Please open a WAV file and try again.");
+
+                stream.ReadInt32(); // File size
+
+                if (stream.ReadString(4) != "WAVE")
+                    throw new InvalidDataException("Not a WAV file. Please open a WAV file and try again.");
+
+                bool fmtChunkFound = false;
+                bool dataChunkFound = false;
+                int blockAlign = 0;
+
+                // Iterate through chunks
+                while (stream.Position < stream.Length)
+                {
+                    string chunkId = stream.ReadString(4);
+                    int chunkSize = stream.ReadInt32();
+
+                    switch (chunkId)
+                    {
+                        case "fmt ":
+                            short audioFormat = stream.ReadInt16();
+                            if (audioFormat != 0x0011) // IMA ADPCM
+                                throw new InvalidDataException("WAV file is not IMA ADPCM format.");
+
+                            entry.codec = FSBCodec.ADPCM;
+                            entry.numChannels = stream.ReadInt16();
+                            entry.sampleRate = stream.ReadInt32();
+                            stream.Position += 4; // Skip AvgBytesPerSec
+                            blockAlign = stream.ReadInt16();
+                            stream.Position += 2; // Skip bitsPerSample
+                            fmtChunkFound = true;
+
+                            // Skip extra format bytes if they exist
+                            if (chunkSize > 16)
+                            {
+                                stream.Position += chunkSize - 16;
+                            }
+                            break;
+
+                        case "data":
+                            entry.streamSize = chunkSize;
+                            entry.audioData = stream.ReadBytes(chunkSize);
+                            dataChunkFound = true;
+                            break;
+
+                        default:
+                            // Skip other chunks
+                            stream.Position += chunkSize;
+                            break;
+                    }
+                }
+
+                if (!fmtChunkFound)
+                    throw new InvalidDataException("Could not find 'fmt ' chunk in WAV file.");
+                if (!dataChunkFound)
+                    throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
+
+                // Calculate numSamples for ADPCM
+                if (blockAlign > 0)
+                {
+                    entry.numSamples = (entry.streamSize / blockAlign) * (1 + (blockAlign - 4 * entry.numChannels) * 2 / entry.numChannels);
+                }
+
+
+                string fileName = Path.GetFileNameWithoutExtension(path);
+                entry.name = fileName.Length > 30 ? fileName.Substring(0, 30) : fileName;
+                entry.sourceFileName = Path.GetFileName(path);
+                entry.loopEndSample = entry.numSamples - 1;
             }
 
             return entry;
@@ -164,7 +244,7 @@ namespace FSBEditor
                     stream.WriteInt32(0); // Loop start sample
                     stream.WriteInt32(entry.loopEndSample);
                     stream.WriteBytes(new byte[] { 0x0, 0x0, 0x0 }); // Unknown empty bytes before codec
-                    stream.WriteByte(0x1);
+                    stream.WriteByte((byte)entry.codec);
                     stream.WriteInt32(entry.sampleRate);
                     stream.WriteInt16(entry.pan);
                     stream.WriteInt16(entry.defPri);

@@ -6,19 +6,25 @@ using System.Threading.Tasks;
 
 namespace FSBEditor
 {
+    public enum FSBCodec : byte
+    {
+        XMA = 1,
+        ADPCM = 4
+    }
+
     class FSBEntry
     {
-        public string name, xmaName;
+        public string name, sourceFileName;
         public short size;
         public int numSamples, streamSize, loopStartSample, loopEndSample, sampleRate, volume, unknownInt;
         public long startOffset;
         public short pan, defPri, numChannels;
         public byte[] audioData, unknownData;
-        public byte codec;
+        public FSBCodec codec;
 
         public FSBEntry()
         {
-            codec = 1;
+            codec = FSBCodec.XMA;
             loopStartSample = 0;
             defPri = 128;
             pan = 255;

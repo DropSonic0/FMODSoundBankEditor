@@ -39,9 +39,9 @@
                     <TextBox x:Name="txtCodecRO" HorizontalAlignment="Left" Height="18" Margin="360,193,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="141" IsEnabled="False"/>
                     <Label Content="Volume" HorizontalAlignment="Left" Margin="241,212,0,0" VerticalAlignment="Top" Width="108"/>
                     <TextBox x:Name="txtVolume" HorizontalAlignment="Left" Height="18" Margin="360,216,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="142" IsEnabled="False" TextChanged="txtVolume_TextChanged"/>
-                    <Button x:Name="btnImportXma" Content="Import .xma" HorizontalAlignment="Left" Height="21" Margin="426,239,0,0" VerticalAlignment="Top" Width="75" IsEnabled="False" Click="btnImportXma_Click"/>
+                    <Button x:Name="btnImportAudio" Content="Import Audio" HorizontalAlignment="Left" Height="21" Margin="426,239,0,0" VerticalAlignment="Top" Width="75" IsEnabled="False" Click="btnImportAudio_Click"/>
                     <Label Content="Audio Stream" HorizontalAlignment="Left" Margin="241,236,0,0" VerticalAlignment="Top" Width="108"/>
-                    <Label x:Name="lblCurrentXma" Content="" HorizontalAlignment="Right" Margin="0,260,11,0" VerticalAlignment="Top" Width="259" FontSize="10"/>
+                    <Label x:Name="lblCurrentAudioFile" Content="" HorizontalAlignment="Right" Margin="0,260,11,0" VerticalAlignment="Top" Width="259" FontSize="10"/>
                     <Button x:Name="btnAdd" Content="+" HorizontalAlignment="Left" Height="25" Margin="211,10,0,0" VerticalAlignment="Top" Width="25" Click="btnAdd_Click" />
                     <Button x:Name="btnDel" Content="-" HorizontalAlignment="Left" Height="25" Margin="211,40,0,0" VerticalAlignment="Top" Width="25"  IsEnabled="False" Click="btnDel_Click"/>
                 </Grid>
