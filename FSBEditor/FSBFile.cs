@@ -153,17 +153,17 @@ namespace FSBEditor
         public FSBEntry ReadWAV(string path)
         {
             FSBEntry entry = new FSBEntry();
-            using (var stream = new BinaryStream(File.OpenRead(path)))
+            using (var stream = new BinaryReader(File.Open(path, FileMode.Open)))
             {
                 // Read RIFF header
-                if (stream.ReadString(4) != "RIFF")
+                if (new string(stream.ReadChars(4)) != "RIFF")
                     throw new InvalidDataException("Not a WAV file.");
                 stream.ReadInt32(); // File size
-                if (stream.ReadString(4) != "WAVE")
+                if (new string(stream.ReadChars(4)) != "WAVE")
                     throw new InvalidDataException("Not a WAV file.");
 
                 // Read fmt chunk
-                if (stream.ReadString(4) != "fmt ")
+                if (new string(stream.ReadChars(4)) != "fmt ")
                     throw new InvalidDataException("Expected 'fmt ' chunk.");
                 int fmtChunkSize = stream.ReadInt32();
                 short audioFormat = stream.ReadInt16();
@@ -184,13 +184,13 @@ namespace FSBEditor
                 }
 
                 // Read fact chunk
-                if (stream.ReadString(4) != "fact")
+                if (new string(stream.ReadChars(4)) != "fact")
                     throw new InvalidDataException("Expected 'fact' chunk.");
                 stream.ReadInt32(); // Chunk size
                 entry.numSamples = stream.ReadInt32();
 
                 // Read data chunk
-                if (stream.ReadString(4) != "data")
+                if (new string(stream.ReadChars(4)) != "data")
                     throw new InvalidDataException("Expected 'data' chunk.");
                 entry.streamSize = stream.ReadInt32();
                 entry.audioData = stream.ReadBytes(entry.streamSize);
