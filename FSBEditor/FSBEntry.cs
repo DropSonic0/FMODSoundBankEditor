@@ -16,7 +16,7 @@ namespace FSBEditor
     {
         public string name, sourceFileName;
         public short size;
-        public int numSamples, streamSize, loopStartSample, loopEndSample, sampleRate, volume, unknownInt;
+        public int numSamples, streamSize, loopStartSample, loopEndSample, sampleRate, volume;
         public uint flags;
         public long startOffset;
         public short pan, defPri, numChannels, blockAlign;
@@ -31,7 +31,6 @@ namespace FSBEditor
             pan = 255;
             volume = 112;
             numChannels = 1;
-            unknownInt = 0;
         }
     }
 }

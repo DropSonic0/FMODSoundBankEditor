@@ -80,7 +80,7 @@ namespace FSBEditor
 
                     entry.volume = stream.ReadInt32();
                     entry.unknownData = stream.ReadBytes(entry.size - 80);
-                    entry.unknownInt = stream.ReadInt32();
+                    stream.Position += 4; // Skip unknownInt
 
                     fsbEntries.Add(entry);
                 }
@@ -303,7 +303,16 @@ namespace FSBEditor
                     }
                     stream.WriteBytes(unknownDataBuffer);
 
-                    stream.WriteInt32(entry.unknownInt);
+                    int unknownInt = entry.numSamples;
+                    if (entry.numChannels == 2) // Stereo
+                    {
+                        unknownInt += 384;
+                    }
+                    else // Mono
+                    {
+                        unknownInt += 768;
+                    }
+                    stream.WriteInt32(unknownInt);
                 }
 
                 foreach (FSBEntry entry in fsbEntries)
