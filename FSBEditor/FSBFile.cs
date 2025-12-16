@@ -41,7 +41,7 @@ namespace FSBEditor
                 numSounds = stream.ReadInt32();
                 sampleHeaderSize = stream.ReadInt32();
 
-                stream.Position = 0x1C;
+                stream.Position = 0x18;
                 headerHash = stream.ReadBytes(24);
 
                 stream.Position = 0x30;
@@ -298,19 +298,6 @@ namespace FSBEditor
 
                     if (entry.unknownData != null)
                     {
-                        int unknownInt = entry.numSamples;
-                        if (entry.numChannels == 2) // Stereo
-                        {
-                            unknownInt += 384;
-                        }
-                        else // Mono
-                        {
-                            unknownInt += 768;
-                        }
-
-                        byte[] unknownIntBytes = BitConverter.GetBytes(unknownInt);
-                        Array.Copy(unknownIntBytes, 0, entry.unknownData, entry.unknownData.Length - 4, 4);
-
                         stream.WriteBytes(entry.unknownData);
                     }
                 }
