@@ -57,9 +57,17 @@ namespace FSBEditor
                     entry.loopStartSample = stream.ReadInt32();
                     entry.loopEndSample = stream.ReadInt32();
 
-                    stream.Position += 0x03;
+                    entry.flags = stream.ReadUInt32();
 
-                    entry.codec = (FSBCodec)stream.ReadByte();
+                    if ((entry.flags & 0x400000) != 0) // FSOUND_IMAADPCM
+                    {
+                        entry.codec = FSBCodec.ADPCM;
+                    }
+                    else
+                    {
+                        entry.codec = FSBCodec.XMA; // Default to XMA
+                    }
+
                     entry.sampleRate = stream.ReadInt32();
                     entry.pan = stream.ReadInt16();
                     entry.defPri = stream.ReadInt16();
@@ -265,8 +273,7 @@ namespace FSBEditor
                     stream.WriteInt32(entry.streamSize);
                     stream.WriteInt32(0); // Loop start sample
                     stream.WriteInt32(entry.loopEndSample);
-                    stream.WriteBytes(new byte[] { 0x0, 0x0, 0x0 }); // Unknown empty bytes before codec
-                    stream.WriteByte((byte)entry.codec);
+                    stream.WriteUInt32(entry.flags);
                     stream.WriteInt32(entry.sampleRate);
                     stream.WriteInt16(entry.pan);
                     stream.WriteInt16(entry.defPri);
