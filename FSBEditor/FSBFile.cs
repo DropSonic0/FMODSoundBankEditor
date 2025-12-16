@@ -232,8 +232,7 @@ namespace FSBEditor
 
                 foreach (FSBEntry entry in fsbEntries)
                 {
-                    // Overwrite header sizes with new calculated one
-                    entry.size = (sizeof(short) * 5) + (sizeof(int) * 15) + (sizeof(float) * 2) + 34; // 34 = 30 for char, 4 for 3 unknown + 1 codec byte
+                    entry.size = 112;
                     headerSize += entry.size;
                     totalDataSize += entry.streamSize;
                 }
@@ -297,7 +296,13 @@ namespace FSBEditor
                     stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
                     stream.WriteInt32(entry.volume);
 
-                    stream.WriteBytes(entry.unknownData);
+                    byte[] unknownDataBuffer = new byte[32];
+                    if (entry.unknownData != null)
+                    {
+                        Array.Copy(entry.unknownData, unknownDataBuffer, Math.Min(entry.unknownData.Length, unknownDataBuffer.Length));
+                    }
+                    stream.WriteBytes(unknownDataBuffer);
+
                     stream.WriteInt32(entry.unknownInt);
                 }
 
