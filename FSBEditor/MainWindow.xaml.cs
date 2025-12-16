@@ -191,6 +191,7 @@ namespace FSBEditor
                     existingEntry.numChannels = tempEntry.numChannels;
                     existingEntry.audioData = tempEntry.audioData;
                     existingEntry.codec = tempEntry.codec;
+                    existingEntry.blockAlign = tempEntry.blockAlign;
 
                     currentFsbEntry = existingEntry;
 

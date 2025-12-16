@@ -157,7 +157,8 @@ namespace FSBEditor
                             entry.numChannels = stream.ReadInt16();
                             entry.sampleRate = stream.ReadInt32();
                             stream.Position += 4; // Skip AvgBytesPerSec
-                            blockAlign = stream.ReadInt16();
+                            entry.blockAlign = (short)stream.ReadInt16();
+                            blockAlign = entry.blockAlign;
                             stream.Position += 2; // Skip bitsPerSample
                             fmtChunkFound = true;
 
@@ -248,7 +249,16 @@ namespace FSBEditor
                     stream.WriteInt32(entry.sampleRate);
                     stream.WriteInt16(entry.pan);
                     stream.WriteInt16(entry.defPri);
-                    stream.WriteInt16(entry.defPri); // Unknown value same as defPri
+
+                    if (entry.codec == FSBCodec.ADPCM)
+                    {
+                        stream.WriteInt16(entry.blockAlign);
+                    }
+                    else
+                    {
+                        stream.WriteInt16(0);
+                    }
+
                     stream.WriteInt16(entry.numChannels);
                     stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
                     stream.WriteInt32(entry.volume);

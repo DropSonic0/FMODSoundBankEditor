@@ -18,7 +18,7 @@ namespace FSBEditor
         public short size;
         public int numSamples, streamSize, loopStartSample, loopEndSample, sampleRate, volume, unknownInt;
         public long startOffset;
-        public short pan, defPri, numChannels;
+        public short pan, defPri, numChannels, blockAlign;
         public byte[] audioData, unknownData;
         public FSBCodec codec;
 
