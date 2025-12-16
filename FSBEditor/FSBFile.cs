@@ -79,7 +79,25 @@ namespace FSBEditor
 
                     entry.numChannels = stream.ReadInt16();
 
-                    stream.Position += 0x08;
+                    if (entry.codec == FSBCodec.ADPCM)
+                    {
+                        short extraDataSize = stream.ReadInt16();
+                        if (extraDataSize == 2)
+                        {
+                            entry.samplesPerBlock = stream.ReadInt16();
+                            stream.Position += 4; // Skip padding
+                        }
+                        else
+                        {
+                            // Not the format we expect, seek back and skip the 8 bytes to not break parsing
+                            stream.Position -= 2;
+                            stream.Position += 8;
+                        }
+                    }
+                    else
+                    {
+                        stream.Position += 8; // Skip for non-ADPCM
+                    }
 
                     entry.volume = stream.ReadInt32();
                     entry.unknownData = stream.ReadBytes(entry.size - 76);
@@ -148,7 +166,6 @@ namespace FSBEditor
 
                 bool fmtChunkFound = false;
                 bool dataChunkFound = false;
-                bool factChunkFound = false;
 
                 // Robustly iterate through chunks
                 while (stream.Position < stream.Length)
@@ -167,7 +184,7 @@ namespace FSBEditor
                             entry.codec = FSBCodec.ADPCM;
                             entry.numChannels = stream.ReadInt16();
                             entry.sampleRate = stream.ReadInt32();
-                            stream.Position += 4; // Skip AvgBytesPerSec
+                            stream.ReadInt32(); // Read and discard AvgBytesPerSec
                             entry.blockAlign = stream.ReadInt16();
 
                             short bitsPerSample = stream.ReadInt16();
@@ -189,7 +206,6 @@ namespace FSBEditor
 
                         case "fact":
                             entry.numSamples = stream.ReadInt32();
-                            factChunkFound = true;
                             break;
 
                         case "data":
@@ -211,17 +227,6 @@ namespace FSBEditor
                     throw new InvalidDataException("Could not find 'fmt ' chunk in WAV file.");
                 if (!dataChunkFound)
                     throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
-
-                // Recalculate numSamples if 'fact' chunk is missing
-                if (!factChunkFound)
-                {
-                    if (entry.samplesPerBlock == 0)
-                    {
-                        // Fallback to standard formula if not in extended fmt
-                        entry.samplesPerBlock = (short)(((entry.blockAlign - 4 * entry.numChannels) * 8 / (4 * entry.numChannels)) + 1);
-                    }
-                    entry.numSamples = (entry.streamSize / entry.blockAlign) * entry.samplesPerBlock;
-                }
 
                 string fileName = Path.GetFileNameWithoutExtension(path);
                 entry.name = fileName.Length > 30 ? fileName.Substring(0, 30) : fileName;
@@ -297,17 +302,21 @@ namespace FSBEditor
                     stream.WriteInt16(entry.pan);
                     stream.WriteInt16(entry.defPri);
 
+                    stream.WriteInt16(entry.blockAlign);
+
+                    stream.WriteInt16(entry.numChannels);
+
                     if (entry.codec == FSBCodec.ADPCM)
                     {
-                        stream.WriteInt16(entry.blockAlign);
+                        stream.WriteInt16(2); // extraDataSize
+                        stream.WriteInt16(entry.samplesPerBlock);
+                        stream.WriteInt32(0); // padding
                     }
                     else
                     {
-                        stream.WriteInt16(0);
+                        stream.WriteInt64(0); // padding
                     }
 
-                    stream.WriteInt16(entry.numChannels);
-                    stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
                     stream.WriteInt32(entry.volume);
 
                     if (entry.unknownData != null)
