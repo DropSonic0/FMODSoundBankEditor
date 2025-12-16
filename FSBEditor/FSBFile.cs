@@ -174,6 +174,16 @@ namespace FSBEditor
                             if (bitsPerSample != 4)
                                 throw new InvalidDataException("WAV file is not 4-bit IMA ADPCM.");
 
+                            // Read extended format parameters if they exist
+                            if (chunkSize > 16)
+                            {
+                                short extraDataSize = stream.ReadInt16();
+                                if (extraDataSize == 2)
+                                {
+                                    entry.samplesPerBlock = stream.ReadInt16();
+                                }
+                            }
+
                             fmtChunkFound = true;
                             break;
 
@@ -203,10 +213,9 @@ namespace FSBEditor
                     throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
 
                 // Recalculate numSamples if 'fact' chunk is missing
-                if (!factChunkFound)
+                if (!factChunkFound && entry.samplesPerBlock > 0)
                 {
-                    int samplesPerBlock = (entry.blockAlign - 4 * entry.numChannels) * 8 / (4 * entry.numChannels) + 1;
-                    entry.numSamples = (entry.streamSize / entry.blockAlign) * samplesPerBlock;
+                    entry.numSamples = (entry.streamSize / entry.blockAlign) * entry.samplesPerBlock;
                 }
 
                 string fileName = Path.GetFileNameWithoutExtension(path);
