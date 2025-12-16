@@ -213,8 +213,13 @@ namespace FSBEditor
                     throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
 
                 // Recalculate numSamples if 'fact' chunk is missing
-                if (!factChunkFound && entry.samplesPerBlock > 0)
+                if (!factChunkFound)
                 {
+                    if (entry.samplesPerBlock == 0)
+                    {
+                        // Fallback to standard formula if not in extended fmt
+                        entry.samplesPerBlock = (short)(((entry.blockAlign - 4 * entry.numChannels) * 8 / (4 * entry.numChannels)) + 1);
+                    }
                     entry.numSamples = (entry.streamSize / entry.blockAlign) * entry.samplesPerBlock;
                 }
 
