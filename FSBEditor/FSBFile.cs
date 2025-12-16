@@ -230,8 +230,29 @@ namespace FSBEditor
                 stream.WriteUInt32(64); // Hardcoded flags?
                 stream.WriteBytes(new byte[] { 0x75, 0x44, 0xD7, 0x47, 0x8B, 0x24, 0xCB, 0xE9, 0x53, 0xBD, 0xBA, 0xB1, 0xB6, 0x12, 0x8A, 0x4C, 0xF4, 0xE3, 0x9C, 0x9B, 0xEB, 0x57, 0x0F, 0x70 }); // Some sort of hash
 
+                const uint FSOUND_STEREO = 0x40;
+                const uint FSOUND_2D = 0x2000;
+                const uint FSOUND_IMAADPCM = 0x400000;
+                const uint FSOUND_IMAADPCMSTEREO = 0x20000000;
+
                 foreach (FSBEntry entry in fsbEntries)
                 {
+                    entry.flags = FSOUND_2D;
+
+                    if (entry.numChannels == 2)
+                    {
+                        entry.flags |= FSOUND_STEREO;
+                    }
+
+                    if (entry.codec == FSBCodec.ADPCM)
+                    {
+                        entry.flags |= FSOUND_IMAADPCM;
+                        if (entry.numChannels == 2)
+                        {
+                            entry.flags |= FSOUND_IMAADPCMSTEREO;
+                        }
+                    }
+
                     stream.WriteInt16(entry.size);
                     stream.WriteString(entry.name, StringCoding.Raw);
                     
@@ -268,7 +289,7 @@ namespace FSBEditor
                         stream.WriteInt32(0);
                     }*/
 
-                    stream.WriteInt32(0);
+                    stream.WriteUInt32(entry.flags);
                     stream.WriteInt32(0);
                     stream.WriteInt32(0);
                     stream.WriteInt32(0);
