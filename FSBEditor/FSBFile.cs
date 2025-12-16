@@ -149,13 +149,13 @@ namespace FSBEditor
                 bool fmtChunkFound = false;
                 bool dataChunkFound = false;
                 bool factChunkFound = false;
-                int blockAlign = 0;
 
-                // Iterate through chunks
+                // Robustly iterate through chunks
                 while (stream.Position < stream.Length)
                 {
                     string chunkId = stream.ReadString(4);
                     int chunkSize = stream.ReadInt32();
+                    long chunkEnd = stream.Position + chunkSize;
 
                     switch (chunkId)
                     {
@@ -168,16 +168,13 @@ namespace FSBEditor
                             entry.numChannels = stream.ReadInt16();
                             entry.sampleRate = stream.ReadInt32();
                             stream.Position += 4; // Skip AvgBytesPerSec
-                            entry.blockAlign = (short)stream.ReadInt16();
-                            blockAlign = entry.blockAlign;
-                            stream.Position += 2; // Skip bitsPerSample
-                            fmtChunkFound = true;
+                            entry.blockAlign = stream.ReadInt16();
 
-                            // Skip extra format bytes if they exist
-                            if (chunkSize > 16)
-                            {
-                                stream.Position += chunkSize - 16;
-                            }
+                            short bitsPerSample = stream.ReadInt16();
+                            if (bitsPerSample != 4)
+                                throw new InvalidDataException("WAV file is not 4-bit IMA ADPCM.");
+
+                            fmtChunkFound = true;
                             break;
 
                         case "fact":
@@ -190,11 +187,13 @@ namespace FSBEditor
                             entry.audioData = stream.ReadBytes(chunkSize);
                             dataChunkFound = true;
                             break;
+                    }
 
-                        default:
-                            // Skip other chunks
-                            stream.Position += chunkSize;
-                            break;
+                    // Ensure the stream is positioned correctly for the next chunk, accounting for padding
+                    stream.Position = chunkEnd;
+                    if (stream.Position % 2 != 0)
+                    {
+                        stream.Position++;
                     }
                 }
 
@@ -203,12 +202,12 @@ namespace FSBEditor
                 if (!dataChunkFound)
                     throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
 
-                // Calculate numSamples for ADPCM if 'fact' chunk was not found
-                if (!factChunkFound && blockAlign > 0)
+                // Recalculate numSamples if 'fact' chunk is missing
+                if (!factChunkFound)
                 {
-                    entry.numSamples = (entry.streamSize / blockAlign) * (1 + (blockAlign - 4 * entry.numChannels) * 2 / entry.numChannels);
+                    int samplesPerBlock = (entry.blockAlign - 4 * entry.numChannels) * 8 / (4 * entry.numChannels) + 1;
+                    entry.numSamples = (entry.streamSize / entry.blockAlign) * samplesPerBlock;
                 }
-
 
                 string fileName = Path.GetFileNameWithoutExtension(path);
                 entry.name = fileName.Length > 30 ? fileName.Substring(0, 30) : fileName;
