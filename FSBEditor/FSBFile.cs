@@ -13,7 +13,7 @@ namespace FSBEditor
     {
         public string magic = "FSB4", xmaMagic = "RIFF";
         public int audioStartOffset, sampleHeaderSize, numSounds;
-        byte[] dataHeader = new byte[] { 0x64, 0x61, 0x74, 0x61 };
+        byte[] dataHeader = new byte[] { 0x64, 0x61, 0x74, 0x61 }, headerHash;
         public List<FSBEntry> fsbEntries;
         public List<string> entryFields;
 
@@ -40,6 +40,9 @@ namespace FSBEditor
 
                 numSounds = stream.ReadInt32();
                 sampleHeaderSize = stream.ReadInt32();
+
+                stream.Position = 0x1C;
+                headerHash = stream.ReadBytes(24);
 
                 stream.Position = 0x30;
 
@@ -79,8 +82,7 @@ namespace FSBEditor
                     stream.Position += 0x08;
 
                     entry.volume = stream.ReadInt32();
-                    entry.unknownData = stream.ReadBytes(entry.size - 80);
-                    stream.Position += 4; // Skip unknownInt
+                    entry.unknownData = stream.ReadBytes(entry.size - 76);
 
                     fsbEntries.Add(entry);
                 }
@@ -232,7 +234,6 @@ namespace FSBEditor
 
                 foreach (FSBEntry entry in fsbEntries)
                 {
-                    entry.size = 112;
                     headerSize += entry.size;
                     totalDataSize += entry.streamSize;
                 }
@@ -241,7 +242,7 @@ namespace FSBEditor
                 stream.WriteInt32(totalDataSize);
                 stream.WriteUInt32(262144); // Hardcoded extended version number?
                 stream.WriteUInt32(64); // Hardcoded flags?
-                stream.WriteBytes(new byte[] { 0x75, 0x44, 0xD7, 0x47, 0x8B, 0x24, 0xCB, 0xE9, 0x53, 0xBD, 0xBA, 0xB1, 0xB6, 0x12, 0x8A, 0x4C, 0xF4, 0xE3, 0x9C, 0x9B, 0xEB, 0x57, 0x0F, 0x70 }); // Some sort of hash
+                stream.WriteBytes(headerHash); // Some sort of hash
 
                 const uint FSOUND_STEREO = 0x40;
                 const uint FSOUND_2D = 0x2000;
@@ -296,23 +297,23 @@ namespace FSBEditor
                     stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
                     stream.WriteInt32(entry.volume);
 
-                    byte[] unknownDataBuffer = new byte[32];
                     if (entry.unknownData != null)
                     {
-                        Array.Copy(entry.unknownData, unknownDataBuffer, Math.Min(entry.unknownData.Length, unknownDataBuffer.Length));
-                    }
-                    stream.WriteBytes(unknownDataBuffer);
+                        int unknownInt = entry.numSamples;
+                        if (entry.numChannels == 2) // Stereo
+                        {
+                            unknownInt += 384;
+                        }
+                        else // Mono
+                        {
+                            unknownInt += 768;
+                        }
 
-                    int unknownInt = entry.numSamples;
-                    if (entry.numChannels == 2) // Stereo
-                    {
-                        unknownInt += 384;
+                        byte[] unknownIntBytes = BitConverter.GetBytes(unknownInt);
+                        Array.Copy(unknownIntBytes, 0, entry.unknownData, entry.unknownData.Length - 4, 4);
+
+                        stream.WriteBytes(entry.unknownData);
                     }
-                    else // Mono
-                    {
-                        unknownInt += 768;
-                    }
-                    stream.WriteInt32(unknownInt);
                 }
 
                 foreach (FSBEntry entry in fsbEntries)
