@@ -72,7 +72,7 @@ namespace FSBEditor
                     entry.pan = stream.ReadInt16();
                     entry.defPri = stream.ReadInt16();
 
-                    stream.Position += 0x02;
+                    entry.blockAlign = stream.ReadInt16();
 
                     entry.numChannels = stream.ReadInt16();
 
@@ -146,6 +146,7 @@ namespace FSBEditor
 
                 bool fmtChunkFound = false;
                 bool dataChunkFound = false;
+                bool factChunkFound = false;
                 int blockAlign = 0;
 
                 // Iterate through chunks
@@ -177,6 +178,11 @@ namespace FSBEditor
                             }
                             break;
 
+                        case "fact":
+                            entry.numSamples = stream.ReadInt32();
+                            factChunkFound = true;
+                            break;
+
                         case "data":
                             entry.streamSize = chunkSize;
                             entry.audioData = stream.ReadBytes(chunkSize);
@@ -195,8 +201,8 @@ namespace FSBEditor
                 if (!dataChunkFound)
                     throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
 
-                // Calculate numSamples for ADPCM
-                if (blockAlign > 0)
+                // Calculate numSamples for ADPCM if 'fact' chunk was not found
+                if (!factChunkFound && blockAlign > 0)
                 {
                     entry.numSamples = (entry.streamSize / blockAlign) * (1 + (blockAlign - 4 * entry.numChannels) * 2 / entry.numChannels);
                 }
@@ -291,36 +297,8 @@ namespace FSBEditor
                     stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
                     stream.WriteInt32(entry.volume);
 
-                    /*for (int i = 0; i < 9; i++) // Write 9 unknown ints based on 4n0_ausmini_exh example
-                    {
-                        stream.WriteInt32(0);
-                    }*/
-
-                    stream.WriteUInt32(entry.flags);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(16);
-                    stream.WriteInt32(1);
-                    stream.WriteInt32(3);
-                    stream.WriteInt32(0);
-
-                    // Some unknown ints here - usually appear to be 384 or 768 more than numSamples based on mono or stereo
-                    if (entry.unknownInt == 0)
-                    {
-                        if (entry.numChannels == 2)
-                        {
-                            stream.WriteInt32(entry.numSamples + 384);
-                        }
-                        else
-                        {
-                            stream.WriteInt32(entry.numSamples + 768);
-                        }
-                    }
-                    else
-                    {
-                        stream.WriteInt32(entry.unknownInt);
-                    }
+                    stream.WriteBytes(entry.unknownData);
+                    stream.WriteInt32(entry.unknownInt);
                 }
 
                 foreach (FSBEntry entry in fsbEntries)
