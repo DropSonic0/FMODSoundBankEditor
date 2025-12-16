@@ -157,83 +157,49 @@ namespace FSBEditor
             {
                 // Read RIFF header
                 if (stream.ReadString(4) != "RIFF")
-                    throw new InvalidDataException("Not a WAV file. Please open a WAV file and try again.");
-
+                    throw new InvalidDataException("Not a WAV file.");
                 stream.ReadInt32(); // File size
-
                 if (stream.ReadString(4) != "WAVE")
-                    throw new InvalidDataException("Not a WAV file. Please open a WAV file and try again.");
+                    throw new InvalidDataException("Not a WAV file.");
 
-                bool fmtChunkFound = false;
-                bool dataChunkFound = false;
-
-                // Robustly iterate through chunks
-                while (stream.Position < stream.Length)
+                // Read fmt chunk
+                if (stream.ReadString(4) != "fmt ")
+                    throw new InvalidDataException("Expected 'fmt ' chunk.");
+                int fmtChunkSize = stream.ReadInt32();
+                short audioFormat = stream.ReadInt16();
+                if (audioFormat != 0x0011) // IMA ADPCM
+                    throw new InvalidDataException("WAV file is not IMA ADPCM format.");
+                entry.codec = FSBCodec.ADPCM;
+                entry.numChannels = stream.ReadInt16();
+                entry.sampleRate = stream.ReadInt32();
+                stream.ReadInt32(); // Read and discard AvgBytesPerSec
+                entry.blockAlign = stream.ReadInt16();
+                short bitsPerSample = stream.ReadInt16();
+                if (bitsPerSample != 4)
+                    throw new InvalidDataException("WAV file is not 4-bit IMA ADPCM.");
+                short extraDataSize = stream.ReadInt16();
+                if (extraDataSize == 2)
                 {
-                    string chunkId = stream.ReadString(4);
-                    int chunkSize = stream.ReadInt32();
-                    long chunkEnd = stream.Position + chunkSize;
-
-                    switch (chunkId)
-                    {
-                        case "fmt ":
-                            short audioFormat = stream.ReadInt16();
-                            if (audioFormat != 0x0011) // IMA ADPCM
-                                throw new InvalidDataException("WAV file is not IMA ADPCM format.");
-
-                            entry.codec = FSBCodec.ADPCM;
-                            entry.numChannels = stream.ReadInt16();
-                            entry.sampleRate = stream.ReadInt32();
-                            stream.ReadInt32(); // Read and discard AvgBytesPerSec
-                            entry.blockAlign = stream.ReadInt16();
-
-                            short bitsPerSample = stream.ReadInt16();
-                            if (bitsPerSample != 4)
-                                throw new InvalidDataException("WAV file is not 4-bit IMA ADPCM.");
-
-                            // Read extended format parameters if they exist
-                            if (chunkSize > 16)
-                            {
-                                short extraDataSize = stream.ReadInt16();
-                                if (extraDataSize == 2)
-                                {
-                                    entry.samplesPerBlock = stream.ReadInt16();
-                                }
-                            }
-
-                            fmtChunkFound = true;
-                            break;
-
-                        case "fact":
-                            entry.numSamples = stream.ReadInt32();
-                            break;
-
-                        case "data":
-                            entry.streamSize = chunkSize;
-                            entry.audioData = stream.ReadBytes(chunkSize);
-                            dataChunkFound = true;
-                            break;
-                    }
-
-                    // Ensure the stream is positioned correctly for the next chunk, accounting for padding
-                    stream.Position = chunkEnd;
-                    if (stream.Position % 2 != 0)
-                    {
-                        stream.Position++;
-                    }
+                    entry.samplesPerBlock = stream.ReadInt16();
                 }
 
-                if (!fmtChunkFound)
-                    throw new InvalidDataException("Could not find 'fmt ' chunk in WAV file.");
-                if (!dataChunkFound)
-                    throw new InvalidDataException("Could not find 'data' chunk in WAV file.");
+                // Read fact chunk
+                if (stream.ReadString(4) != "fact")
+                    throw new InvalidDataException("Expected 'fact' chunk.");
+                stream.ReadInt32(); // Chunk size
+                entry.numSamples = stream.ReadInt32();
+
+                // Read data chunk
+                if (stream.ReadString(4) != "data")
+                    throw new InvalidDataException("Expected 'data' chunk.");
+                entry.streamSize = stream.ReadInt32();
+                entry.audioData = stream.ReadBytes(entry.streamSize);
 
                 string fileName = Path.GetFileNameWithoutExtension(path);
                 entry.name = fileName.Length > 30 ? fileName.Substring(0, 30) : fileName;
                 entry.sourceFileName = Path.GetFileName(path);
                 entry.loopEndSample = entry.numSamples - 1;
             }
-
             return entry;
         }
 
