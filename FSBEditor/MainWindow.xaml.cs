@@ -75,13 +75,13 @@ namespace FSBEditor
 
                 RefreshFields();
 
-                if (currentFsbEntry.xmaName != "")
+                if (!string.IsNullOrEmpty(currentFsbEntry.sourceFileName))
                 {
-                    lblCurrentXma.Content = string.Format("Current XMA file: {0}", currentFsbEntry.xmaName);
+                    lblCurrentAudioFile.Content = string.Format("Current audio file: {0}", currentFsbEntry.sourceFileName);
                 }
                 else
                 {
-                    lblCurrentXma.Content = "";
+                    lblCurrentAudioFile.Content = "";
                 }
             }
 
@@ -105,7 +105,7 @@ namespace FSBEditor
                 }
             }
 
-            btnImportXma.IsEnabled = active;
+            btnImportAudio.IsEnabled = active;
         }
 
         private void RefreshFields(int indexToUpdate = -1, FSBEntry fsbEntry = null)
@@ -118,7 +118,7 @@ namespace FSBEditor
             txtEndSample.Text = currentFsbEntry.loopEndSample.ToString();
             txtPan.Text = currentFsbEntry.pan.ToString();
             txtChannelsRO.Text = currentFsbEntry.numChannels.ToString();
-            txtCodecRO.Text = currentFsbEntry.codec == 1 ? "XMA" : "Unknown";
+            txtCodecRO.Text = currentFsbEntry.codec == FSBCodec.XMA ? "XMA" : (currentFsbEntry.codec == FSBCodec.ADPCM ? "ADPCM" : "Unknown");
             txtVolume.Text = currentFsbEntry.volume.ToString();
 
             if (indexToUpdate != -1)
@@ -150,10 +150,10 @@ namespace FSBEditor
             }
         }
 
-        private void btnImportXma_Click(object sender, RoutedEventArgs e)
+        private void btnImportAudio_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog openFile = new OpenFileDialog();
-            openFile.Filter = "XMA Audio File|*.xma";
+            openFile.Filter = "XMA Audio File|*.xma|WAV Audio File|*.wav";
             //openFile.InitialDirectory = Directory.GetCurrentDirectory();
             openFile.CheckFileExists = true;
             openFile.CheckPathExists = true;
@@ -163,9 +163,38 @@ namespace FSBEditor
             {
                 try
                 {
-                    currentFsbEntry = fsb.ReadXMA(openFile.FileName);
-                    fsb.fsbEntries[lstFsb.SelectedIndex].xmaName = Path.GetFileNameWithoutExtension(openFile.FileName);
-                    fsb.fsbEntries[lstFsb.SelectedIndex] = currentFsbEntry;
+                    FSBEntry tempEntry = null;
+                    string extension = Path.GetExtension(openFile.FileName).ToLower();
+                    if (extension == ".xma")
+                    {
+                        tempEntry = fsb.ReadXMA(openFile.FileName);
+                    }
+                    else if (extension == ".wav")
+                    {
+                        tempEntry = fsb.ReadWAV(openFile.FileName);
+                    }
+                    else
+                    {
+                        throw new InvalidDataException("Unsupported file type.");
+                    }
+
+                    // Get the existing entry to preserve its metadata
+                    FSBEntry existingEntry = fsb.fsbEntries[lstFsb.SelectedIndex];
+
+                    // Copy only the audio-related data from the new file
+                    existingEntry.name = tempEntry.name;
+                    existingEntry.sourceFileName = tempEntry.sourceFileName;
+                    existingEntry.numSamples = tempEntry.numSamples;
+                    existingEntry.streamSize = tempEntry.streamSize;
+                    existingEntry.loopEndSample = tempEntry.loopEndSample;
+                    existingEntry.sampleRate = tempEntry.sampleRate;
+                    existingEntry.numChannels = tempEntry.numChannels;
+                    existingEntry.audioData = tempEntry.audioData;
+                    existingEntry.codec = tempEntry.codec;
+                    existingEntry.blockAlign = tempEntry.blockAlign;
+                    existingEntry.samplesPerBlock = tempEntry.samplesPerBlock;
+
+                    currentFsbEntry = existingEntry;
 
                     RefreshFields(lstFsb.SelectedIndex, currentFsbEntry);
                 }
@@ -174,7 +203,7 @@ namespace FSBEditor
                     MessageBox.Show(ex.Message, "Error");
                 }
 
-                lblCurrentXma.Content = string.Format("Current XMA file: {0}", currentFsbEntry.xmaName);
+                lblCurrentAudioFile.Content = string.Format("Current audio file: {0}", Path.GetFileName(openFile.FileName));
             }
         }
 

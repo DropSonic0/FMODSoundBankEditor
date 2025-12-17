@@ -13,7 +13,7 @@ namespace FSBEditor
     {
         public string magic = "FSB4", xmaMagic = "RIFF";
         public int audioStartOffset, sampleHeaderSize, numSounds;
-        byte[] dataHeader = new byte[] { 0x64, 0x61, 0x74, 0x61 };
+        byte[] dataHeader = new byte[] { 0x64, 0x61, 0x74, 0x61 }, headerHash;
         public List<FSBEntry> fsbEntries;
         public List<string> entryFields;
 
@@ -41,6 +41,9 @@ namespace FSBEditor
                 numSounds = stream.ReadInt32();
                 sampleHeaderSize = stream.ReadInt32();
 
+                stream.Position = 0x18;
+                headerHash = stream.ReadBytes(24);
+
                 stream.Position = 0x30;
 
                 fsbEntries.Clear();
@@ -57,22 +60,47 @@ namespace FSBEditor
                     entry.loopStartSample = stream.ReadInt32();
                     entry.loopEndSample = stream.ReadInt32();
 
-                    stream.Position += 0x03;
+                    entry.flags = stream.ReadUInt32();
 
-                    entry.codec = (byte)stream.ReadByte();
+                    if ((entry.flags & 0x400000) != 0) // FSOUND_IMAADPCM
+                    {
+                        entry.codec = FSBCodec.ADPCM;
+                    }
+                    else
+                    {
+                        entry.codec = FSBCodec.XMA; // Default to XMA
+                    }
+
                     entry.sampleRate = stream.ReadInt32();
                     entry.pan = stream.ReadInt16();
                     entry.defPri = stream.ReadInt16();
 
-                    stream.Position += 0x02;
+                    entry.blockAlign = stream.ReadInt16();
 
                     entry.numChannels = stream.ReadInt16();
 
-                    stream.Position += 0x08;
+                    if (entry.codec == FSBCodec.ADPCM)
+                    {
+                        short extraDataSize = stream.ReadInt16();
+                        if (extraDataSize == 2)
+                        {
+                            entry.samplesPerBlock = stream.ReadInt16();
+                            stream.Position += 4; // Skip padding
+                        }
+                        else
+                        {
+                            // Not the format we expect, seek back and skip the 8 bytes to not break parsing
+                            stream.Position -= 2;
+                            stream.Position += 8;
+                        }
+                    }
+                    else
+                    {
+                        stream.Position += 8; // Skip for non-ADPCM
+                    }
 
                     entry.volume = stream.ReadInt32();
-                    entry.unknownData = stream.ReadBytes(entry.size - 80);
-                    entry.unknownInt = stream.ReadInt32();
+                    entry.unknownData = stream.ReadBytes(entry.size - 76);
 
                     fsbEntries.Add(entry);
                 }
@@ -101,7 +129,7 @@ namespace FSBEditor
                 string fileName = Path.GetFileNameWithoutExtension(path);
 
                 entry.name = fileName.Substring(0, fileName.Length > 32 ? 31 : fileName.Length);
-                entry.xmaName = fileName;
+                entry.sourceFileName = Path.GetFileName(path);
 
                 stream.Position = 0x16;
 
@@ -122,6 +150,59 @@ namespace FSBEditor
             return entry;
         }
 
+        public FSBEntry ReadWAV(string path)
+        {
+            FSBEntry entry = new FSBEntry();
+            using (var stream = new BinaryReader(File.Open(path, FileMode.Open)))
+            {
+                // Read RIFF header
+                if (new string(stream.ReadChars(4)) != "RIFF")
+                    throw new InvalidDataException("Not a WAV file.");
+                stream.ReadInt32(); // File size
+                if (new string(stream.ReadChars(4)) != "WAVE")
+                    throw new InvalidDataException("Not a WAV file.");
+
+                // Read fmt chunk
+                if (new string(stream.ReadChars(4)) != "fmt ")
+                    throw new InvalidDataException("Expected 'fmt ' chunk.");
+                int fmtChunkSize = stream.ReadInt32();
+                short audioFormat = stream.ReadInt16();
+                if (audioFormat != 0x0011) // IMA ADPCM
+                    throw new InvalidDataException("WAV file is not IMA ADPCM format.");
+                entry.codec = FSBCodec.ADPCM;
+                entry.numChannels = stream.ReadInt16();
+                entry.sampleRate = stream.ReadInt32();
+                stream.ReadInt32(); // Read and discard AvgBytesPerSec
+                entry.blockAlign = stream.ReadInt16();
+                short bitsPerSample = stream.ReadInt16();
+                if (bitsPerSample != 4)
+                    throw new InvalidDataException("WAV file is not 4-bit IMA ADPCM.");
+                short extraDataSize = stream.ReadInt16();
+                if (extraDataSize == 2)
+                {
+                    entry.samplesPerBlock = stream.ReadInt16();
+                }
+
+                // Read fact chunk
+                if (new string(stream.ReadChars(4)) != "fact")
+                    throw new InvalidDataException("Expected 'fact' chunk.");
+                stream.ReadInt32(); // Chunk size
+                entry.numSamples = stream.ReadInt32();
+
+                // Read data chunk
+                if (new string(stream.ReadChars(4)) != "data")
+                    throw new InvalidDataException("Expected 'data' chunk.");
+                entry.streamSize = stream.ReadInt32();
+                entry.audioData = stream.ReadBytes(entry.streamSize);
+
+                string fileName = Path.GetFileNameWithoutExtension(path);
+                entry.name = fileName.Length > 30 ? fileName.Substring(0, 30) : fileName;
+                entry.sourceFileName = Path.GetFileName(path);
+                entry.loopEndSample = entry.numSamples - 1;
+            }
+            return entry;
+        }
+
         public void WriteFile(string path)
         {
             using (var file = new FileStream(path, FileMode.Create))
@@ -137,8 +218,6 @@ namespace FSBEditor
 
                 foreach (FSBEntry entry in fsbEntries)
                 {
-                    // Overwrite header sizes with new calculated one
-                    entry.size = (sizeof(short) * 5) + (sizeof(int) * 15) + (sizeof(float) * 2) + 34; // 34 = 30 for char, 4 for 3 unknown + 1 codec byte
                     headerSize += entry.size;
                     totalDataSize += entry.streamSize;
                 }
@@ -147,10 +226,31 @@ namespace FSBEditor
                 stream.WriteInt32(totalDataSize);
                 stream.WriteUInt32(262144); // Hardcoded extended version number?
                 stream.WriteUInt32(64); // Hardcoded flags?
-                stream.WriteBytes(new byte[] { 0x75, 0x44, 0xD7, 0x47, 0x8B, 0x24, 0xCB, 0xE9, 0x53, 0xBD, 0xBA, 0xB1, 0xB6, 0x12, 0x8A, 0x4C, 0xF4, 0xE3, 0x9C, 0x9B, 0xEB, 0x57, 0x0F, 0x70 }); // Some sort of hash
+                stream.WriteBytes(headerHash); // Some sort of hash
+
+                const uint FSOUND_STEREO = 0x40;
+                const uint FSOUND_2D = 0x2000;
+                const uint FSOUND_IMAADPCM = 0x400000;
+                const uint FSOUND_IMAADPCMSTEREO = 0x20000000;
 
                 foreach (FSBEntry entry in fsbEntries)
                 {
+                    entry.flags = FSOUND_2D;
+
+                    if (entry.numChannels == 2)
+                    {
+                        entry.flags |= FSOUND_STEREO;
+                    }
+
+                    if (entry.codec == FSBCodec.ADPCM)
+                    {
+                        entry.flags |= FSOUND_IMAADPCM;
+                        if (entry.numChannels == 2)
+                        {
+                            entry.flags |= FSOUND_IMAADPCMSTEREO;
+                        }
+                    }
+
                     stream.WriteInt16(entry.size);
                     stream.WriteString(entry.name, StringCoding.Raw);
                     
@@ -163,45 +263,31 @@ namespace FSBEditor
                     stream.WriteInt32(entry.streamSize);
                     stream.WriteInt32(0); // Loop start sample
                     stream.WriteInt32(entry.loopEndSample);
-                    stream.WriteBytes(new byte[] { 0x0, 0x0, 0x0 }); // Unknown empty bytes before codec
-                    stream.WriteByte(0x1);
+                    stream.WriteUInt32(entry.flags);
                     stream.WriteInt32(entry.sampleRate);
                     stream.WriteInt16(entry.pan);
                     stream.WriteInt16(entry.defPri);
-                    stream.WriteInt16(entry.defPri); // Unknown value same as defPri
+
+                    stream.WriteInt16(entry.blockAlign);
+
                     stream.WriteInt16(entry.numChannels);
-                    stream.WriteBytes(new byte[] { 0x00, 0x00, 0x80, 0x3F, 0x00, 0x40, 0x1C, 0x46 }); // Manually write bytes for two floats: 1 and 10000
-                    stream.WriteInt32(entry.volume);
 
-                    /*for (int i = 0; i < 9; i++) // Write 9 unknown ints based on 4n0_ausmini_exh example
+                    if (entry.codec == FSBCodec.ADPCM)
                     {
-                        stream.WriteInt32(0);
-                    }*/
-
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(0);
-                    stream.WriteInt32(16);
-                    stream.WriteInt32(1);
-                    stream.WriteInt32(3);
-                    stream.WriteInt32(0);
-
-                    // Some unknown ints here - usually appear to be 384 or 768 more than numSamples based on mono or stereo
-                    if (entry.unknownInt == 0)
-                    {
-                        if (entry.numChannels == 2)
-                        {
-                            stream.WriteInt32(entry.numSamples + 384);
-                        }
-                        else
-                        {
-                            stream.WriteInt32(entry.numSamples + 768);
-                        }
+                        stream.WriteInt16(2); // extraDataSize
+                        stream.WriteInt16(entry.samplesPerBlock);
+                        stream.WriteInt32(0); // padding
                     }
                     else
                     {
-                        stream.WriteInt32(entry.unknownInt);
+                        stream.WriteInt64(0); // padding
+                    }
+
+                    stream.WriteInt32(entry.volume);
+
+                    if (entry.unknownData != null)
+                    {
+                        stream.WriteBytes(entry.unknownData);
                     }
                 }
 
